@@ -1,0 +1,2028 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker & Kubernetes Notes</title>
+    <style type="text/css">
+        * {
+            box-sizing: border-box;
+            margin: 0;
+        }
+
+        main {
+            width: 900px;
+            margin: 0 auto;
+        }
+
+        strong i {
+            color: orangered;
+        }
+
+        a {
+            font-weight: light;
+            letter-spacing: 1.6;
+            transform: scale(1.8);
+            text-decoration: none;
+            color: royalblue;
+        }
+
+        nav {
+            position: fixed;
+            left: -70px;
+            top: 0;
+            overflow: hidden;
+            line-height: 2.7;
+            width: 20%;
+        }
+    </style>
+</head>
+
+<body>
+    <main>
+        <pre>
+        <nav>
+            <h2>Index</h2>
+            <a href="#docker-fundamentals"> Docker Fundamentals</a>
+            <a href="#building-image"> Building Docker Image</a>
+            <a href="#ci-cd-primer"> What is CI/CD</a>
+            <a href="#single-container-deployment"> Single Container deployment to AWS EBS</a>
+            <a href="#multi-container-deployment"> Multi Container App deployment to AWS EBS</a>
+            <a href="#kubernetes-fundamentals"> Kubernetes Fundamentals</a>
+            <a href="#multi-pod-local-kubernetes"> Multiple Images in Local Kubernetes</a>
+            <a href="#multi-pod-kubernetes-ci-cd"> Multiple Images CI/CD Using Travis</a>
+            <a href="#multi-pod-gke-deployment"> MultiPle Images GCP GKE Deployment</a>
+            <a href="#gck-gke-https"> HTTPS in Kubernetes</a>
+            <a href="#local-dev-live-sync"> Kubernetes Local Development with Live Sync</a>
+        </nav>
+
+        <h2 id="docker-fundamentals">Docker fundamentals</h2>
+        <p>
+        <strong>Why</strong>
+        Docker makes it really easy to install and run software without worrying about setup or dependencies.
+
+        <strong>Docker</strong>
+        Docker is a platform or ecosystem around creating and running containers.
+
+        <strong>How application runs</strong>
+        OS has Kernel, which is a running software process, that governs access between all the programs running on 
+        our computer and all the physical hardware that is connected to your computer as well. A running program 
+        interacts with the kernel through system calls necessarily like function invocations.
+        
+        <strong><i>Namespacing</i></strong>
+        Segmenting part of the hardware resources based on the process that is asking for it.
+        Let's say we need python2 for Chrome and python3 for Nodejs. Then we will segment out part of the hard drive 
+        dedicated to python2 and the other part for python3.
+        With namespacing, we can isolate resources per process or group of processes.
+        
+        <strong><i>Control groups</i></strong>
+        A control group can be used to limit the amount of resources that a particular process can use.
+
+        <strong>A Container is equivalent to, Namespacing + Control groups</strong> 
+        A container is not a physical construct rather it is a process or set of processes that have a grouping of resources
+        specifically assigned to it.
+
+
+        <strong>Image</strong>
+        An image is a single package containing all the dependencies and all the configurations required to run 
+        a very specific program. The image gets stored in our hard drive.
+
+        <strong>Container</strong>
+        And we could use the image to create something called a container. A container is an instance of an image. 
+        You can kind of think of it as a running program. A container is a program with its own isolated set of 
+        hardware resources.
+
+        <strong>Docker workflow</strong>
+            <code>docker run hello-world</code>
+
+        1. Docker client contacted Docker daemon
+        2. The docker daemon pulled the "hello-world" image from the Docker hub. 
+            Because it was not available in the local repository/image cache.
+        3. The docker daemon created a new container from that image which runs the executable that 
+            produces the output you are currently reading.
+
+
+        <strong>Image to container</strong>
+        Image is a file system snapshot. Copy of a very specific set of directories or files and also a startup command.
+        
+        1. The kernel is going to take a little section of the hard drive and make it available to just this container. 
+            The File snapshot of that image is taken and placed into that little segment of the hard drive.
+        2. The startup command is then executed. An instance of that process is created and then the newly created process 
+            is isolated to this set of resources inside the container.
+
+        <strong>Summary</strong>
+        A container is a running process along with a subset of physical resources on your computer that is allocated to 
+        that process specifically.
+
+        An image is a file system snapshot along with a startup command.
+
+        <strong>Namespacing and control groups are not available in all operating systems they are specific to the 
+        Linux operating system</strong>
+
+
+        <strong>Where is this Linux OS VM in respect to Docker</strong>
+        How Docker is running on Windows or Mac
+
+        1. When we installed docker we installed a Linux virtual machine. So long as docker is running you technically 
+            have a Linux virtual machine running on your computer. Inside the virtual machine, all the containers are 
+            going to be created.
+        2. Inside the virtual machine, we have a Linux kernel, the Linux kernel is going to host the running processes 
+            inside of containers. This Linux kernel will be in charge of isolating, limiting, and constraining access 
+            to different physical hardware resources on your computer.
+        </p>
+
+
+
+        <h2 id="building-image">Running, Building image and Process Monitoring</h2>
+        <p >
+        <strong>* <i>docker run &lt;image_name&gt;</i></strong>
+
+        1. Takes the fs snapshot of the image and puts it into the specifically allocated disk space inside the container
+        2. Takes the default startup command and executes it within the container.
+        3. <strong>A separate container does not mean a separate virtual machine, but rather a restricted portion of the hardware 
+            resources allocated and managed by Linux OS's namespacing and Control groups</strong>
+
+        <strong>*** Any time we execute docker run with an image we not only get the image's filesystem snapshot but also the default 
+        command that is supposed to be executed after the container is created.</strong>
+
+        
+        <strong>* <i>docker run &lt;image_name&gt; &lt;overriding_command&gt;</i></strong>
+
+        Overriding the default command of an image and Run it in a container
+        <samp>
+        <i>docker run busybox echo hi there</i>
+        $ hi there
+        </samp>
+
+        
+        <strong>* <i>docker run busybox ping google.com</i></strong>
+
+        lists out all the different running containers that are currently on your machine.
+
+        <i>docker ps</i>
+        <samp>
+        CONTAINER ID   IMAGE     COMMAND             CREATED          STATUS          PORTS     NAMES
+        186033df8e36   busybox   "ping google.com"   21 seconds ago   Up 18 seconds             focused_gagarin
+        </samp>
+
+
+        <strong>* <i>docker ps --all</i></strong>
+
+        all containers available that we created or ran on our local machine. Every container is a (running) process
+
+        <i>We often use the ps command to get the container ID so we can issue some specific commands to some specific containers.</i>
+
+
+        <strong>docker run = docker create + docker start</strong>
+        docker run creates a container from an image and then runs the container
+        
+        a) Creating a Container
+            take the file system snapshot from an image and prepare it to use in the container by e.g., 
+            placing it in the allocated disk space for the container
+            
+            <strong>* <i>docker create &lt;image_name&gt;</i></strong>
+
+                creates a container from an image and returns the id of it.
+
+                docker create hello-world
+                15fd00ec5f571a203370c7d8ae4b622cb4c6e738f771dff2ef3f9f1d71a62bc6
+                
+
+        b) Starting a container
+            We start the container by running the startup command provided by the image
+
+            <strong>* <i>docker start --attach &lt;container_id&gt;</i></strong>
+
+            <i>docker start -a 15fd00ec5f571a203370c7d8ae4b622cb4c6e738f771dff2ef3f9f1d71a62bc6</i>
+            
+            the -a flag makes docker watch for output from the running contain and output them to the terminal.
+            Attach STDOUT/STDERR and forward signals
+
+
+        <strong>* <i>docker system prune</i></strong>
+
+        removes all the docker containers from our disk
+        <samp>
+            Are you sure you want to continue? [y/N] y
+            Deleted Containers:
+            6a9f63abec61fa3e57cc6f111a74bd78b50839ed4d0ade28c701d0b7caa55e6b
+            Total reclaimed space: 0B    
+        </samp>
+
+
+        <strong><i>docker logs &lt;container_id&gt;</i></strong>
+
+        get all the logs that have been emitted by the container.
+        
+        <i>docker logs 8672d3fb120d02271231539ec2503b588944d6e1fa6086b8a675f75e9c5b3b16</i>
+        <samp>$ hi there</samp>
+
+        By running the logs command we are not re-running the container in any shape or form. 
+        We are just retrieving the outputs emitted from the container while it ran earlier.
+
+
+        <strong>Stopping a container</strong>
+
+        <strong>* <i>docker stop &lt;container_id&gt;</i></strong>
+        
+        <strong>* <i>docker kill &lt;container_id&gt;</i></strong>
+
+        Both the stop and kill command will stop the running container. However,
+        When we issue the stop command a hardware signal i.e., SIGTERM message is passed to the primary process 
+        running in that container. Telling it to shut down on its own time. When you want to allow the process to 
+        do some cleanup and shut itself down.
+        
+        On the other hand, when we issue the kill command a hardware signal i.e., SIGKILL message is passed. 
+        It means we are commanding the primary process inside that container to shut down immediately.
+        
+        Ideally, we use the docker stop command to shut down a running container.
+        *** When we issue a docker stop command, if the container does not shut down within 10 seconds then docker 
+            automatically issues a kill command.
+
+
+        <strong>Execute additional commands in a container</strong>
+        <strong>* <i>docker exec -it &lt;container_id&gt; &lt;additional_command&gt;</i> </strong>
+
+        <i>docker exec -it aa797e06c1d6 redis-cli</i>
+        
+        It will not create another container, instead, it will just run another program inside that container 
+        which need to have the program within it that we are trying to execute using the additional command.
+        
+        <strong>The -it flag means, --interactive and --tty respectively.</strong> Keeps the stdin open to the terminal from 
+        where we are issuing the command.
+        In simple terms, connect the to-be-run additional program inside that container with the terminal we are 
+        executing the exec command.
+
+        Each process/program running inside a container is actually running inside a Linux VM and
+        each process has 3 communication channels, STDIN, STDOUT, STDERR
+
+        <strong>Common practical use case for exec command</strong>
+        <strong>* <i>docker exec -it &lt;container_id&gt; sh </i></strong>
+        To get shell access into the running container. Full terminal access in the context of that container
+
+        <strong>Starting a container with a shell terminal on startup</strong>
+        <i>docker run -it busybox sh</i>
+
+        <strong>between two containers they do not automatically share their file system.</strong>
+
+
+        <strong>Build a custom image with docker file</strong>
+        In the docker file,
+        
+        1. Specify a base image
+        2. Run some commands to install additional programs
+        3. Specify a command to run on container startup
+
+        e.g., 
+        <strong><i>projectRoot/Dockerfile</i></strong>
+        <i>
+            # 1. Use an existing docker image as a base
+            FROM alpine
+            
+            # 2. Download and install a dependency
+            RUN apk add --update redis
+            
+            # 3. Tell the image what to do when it starts as a container
+            CMD [ "redis-server" ]
+        </i>
+
+        <strong>Start the image build</strong>
+        In the same directory as the "Dockerfile"  
+        <strong>* <i>docker build .</i></strong>
+
+        <strong>Dokcerfile - Instructions</strong>
+        <strong>FROM</strong> - to specify a base image
+        <strong>RUN</strong> - to run some commands on the base image. E.g.,  additional packages that we want to add to the image
+        <strong>CMD</strong> - to specify a startup command for the image.
+
+        So now our application "redis" will be containerized to run inside Alpine OS which will run inside Docker's Linux VM
+        windows > ubuntu-vm > alpine os > our software
+
+        <strong>The build process details</strong>
+        In each step of the build process,
+            1. The image generated from the previous state is taken and a new temporary container is created
+            2. The instruction is then executed in that container
+            3. and the updated container state is then exported as an image for the next step.
+            4. This process is repeated until all instruction steps stated in the Dockerfile are executed and finally 
+                a Docker image is returned.
+
+        Docker uses a cached version of already-built images as long as the instructions and their order are 
+        the same as some previous build instructions.
+
+        From the point of change to the end of the Docker file's instructions, caches are not used to build a new image.
+        <strong><i>It is advised to put new instructions as far down as possible in the existing Dockerfile.</i></strong>
+
+
+        <strong>Tagging an image</strong>
+        Giving a name to an image while building it.
+
+        <strong>* <i>docker build -t yourDockerId/repo-or-project-name:versionNumber .</i></strong>
+        <i>docker build -t protickr/redis-image:latest .</i>
+
+
+        <strong>Manually creating Docker image from a running Docker container</strong>
+
+        1. docker run -it alpine sh
+        / # apk add --update redis
+
+        2. docker ps
+        > d1de72bafb8d   alpine    "sh"
+        
+        3. <strong><i>docker commit -c "CMD ['redis-server']" d1de72bafb8d</i></strong>
+        sha256:880a7cff8b2dfe6d0c25eb3d1633968da220ec646b4986b7f2496ba42263f038
+
+        so, 880a7cff8b2dfe6d0c25eb3d1633968da220ec646b4986b7f2496ba42263f038 is our new image's ID which already has 
+        Redis installed in it and we also added a startup command by
+        
+        docker commit's -c "CMD ['redis-server']" argument
+
+        <strong>
+        Whenever you are building a docker project none of the outside files are available inside the docker 
+        container by default. We have to link the part of the sectioned-off application files to the container explicitly.
+        </strong>
+
+        <strong>Link/Copy application files into the image</strong>
+        <i>inside Dockerfile</i>
+            <strong><i>COPY ./path/relative/to/build/context ./path/relative/to/root/of/the/container</i></strong>
+
+
+        <strong>Port Mapping</strong>
+        By default, running container will not listen to incoming request unless we explicitly map it to the
+        desired port of our local machine. Also,  port forwarding/mapping is strictly constrained to outside of the container, 
+        we do it only when we run a container.
+
+        <strong>* <i>docker run -p localMachinePort:containerPort &lt;image_id&gt; (or &lt;image name&gt;)</i></strong>
+        <i>docker run -p 8080:8080  protickr/simpleweb</i>
+
+        local machine's port and container's port need not to be same.
+
+
+        <strong>setting work directory inside the container</strong>
+        <i>in Dockerfile</i>
+            <strong><i>WORKDIR /usr/app-name</i></strong>
+        
+        if this folder does not exist it will be automatically created for us.
+        All the commands that we will issue to the container will be executed with respect to the working directory 
+        we have set while creating the image.
+
+
+        <strong>Issue with multiple builds for multiple source code changes</strong>
+        Once an image has been created out of our application source files, any changes made to the application source files, 
+        later on, will not be reflected in the docker image or running container made from it.
+        To achieve the desired effect we have to rebuild our application's docker image.
+
+
+        <strong>Example Dockerfile for our Express js application</strong>
+        <code>
+            FROM node:14-alpine
+        
+            WORKDIR /usr/app
+            
+            COPY ./package.json ./
+            
+            RUN npm install 
+            
+            COPY ./ ./
+            
+            CMD ["npm", "start"]
+        </code>
+
+
+        <strong>Communication between 2 running container on the same VM</strong>
+
+        By default two different containers running at our docker VM can not communicate with each other we need to 
+        establish a network connection to enable them to communicate. We have 2 options
+            1. Docker cli  (docker)
+            2. Docker compose cli (docker-compose)
+        Option 1 is not preferred by experts for this task.
+
+        <strong>Docker compose can be used to
+        start up multiple docker containers at the same time and establish a communication channel between them automatically.</strong>
+
+        The main purpose of docker-compose CLI is to use it with <i>docker-compose.yml</i> file
+        The yml file will contain all the long-winded docker CLI commands.
+        
+        a practical example of running 1 container for redis-server and another for node express application
+        <i>docker-compose.yml</i><code>
+            version: "3"
+            services:
+                redis-server:
+                    image: "redis"
+                node-app:
+                    build: .
+                    ports:
+                    - "4001:8081"
+        </code>
+        docker-compose cli uses the default <i>Dockerfile</i> to build image unless we tell it to use other file
+
+
+        <strong>Docker Compose Commands</strong>
+        
+        <strong>* <i>docker-compose up --build</i></strong>
+            build and run images using Dockerfile from present working directory
+
+        <strong>* <i>docker-compose up --d</i></strong>
+            Run container in the background
+
+        <strong>* <i>docker-compose down</i></strong>
+
+        <strong>exit status code</strong>
+        0 , means we exited and everything is okay
+        1, 2, 3, 4, we exited because something went wrong!
+
+
+        <strong>Docker Compose file's restart policy property</strong>
+        We can tell docker what to do on a event of a crash, there are 4 options,
+            "no" , never attempt to restart the crashed container.
+            always, always restart
+            on-failure, only restart if the container stops with an error code.
+            unless-stopped, always restart unless we (the developers) forcibly stop it.
+        <code>
+        version: "3"
+        services:
+            node-app:
+                restart: "no"
+                build: .
+                ports:
+                - "4001:8081"
+        </code>
+
+        <strong>always run docker-compose from the directory where docker-compose.yml file is located</strong>
+
+        <strong>* <i>docker-compose ps</i></strong>
+
+
+        <strong>Dev docker file for development environment</strong>
+            <i>Dockerfile.dev</i>
+            <strong>* <i>docker build -f Dockerfile.dev .</i></strong>
+            <strong>* <i>docker build -f Dockerfile.dev -t protickr/frontend:latest --progress=plain --no-cache .</i></strong>
+
+        <strong>Volume mapping</strong>
+            to reflect code changes in the source code without rebuilding the image
+            that links a folder inside the local machine to a folder inside the container
+            
+            <strong>* <i>docker run -p 3000:3000 -v /home/node/app/node_modules -v ~/projects/frontend:/home/node/app protickr/frontend</i></strong>
+            
+            1. when we put a colon in the argument to the -v flag we are mapping a folder of the local machine to a folder 
+                inside the container.
+            2. when we do not put a colon, we are stating to docker that, do not try to map the folder of the container 
+                to any folder of our local machine.
+            <strong>The changes made to the files inside bookmarked volumes also propagate to the running container.</strong>
+
+
+        <strong>Complete example of development environment including test runner container</strong>
+
+        <i>project-root/Dockerfile.dev</i><code>
+            FROM node:alpine 
+            
+            USER node
+            RUN mkdir -p /home/node/app
+            WORKDIR /home/node/app
+            
+            COPY --chown=node:node ./package.json ./
+            RUN npm install
+            COPY --chown=node:node ./ ./
+            
+            CMD ["npm", "run", "start"]
+        </code>
+        
+        <i>project-root/docker-compose-dev.yml</i><code>
+            version: '3'
+            services: 
+            web: 
+                build:
+                context: .
+                dockerfile: Dockerfile.dev
+                ports: 
+                - "3000:3000"
+                volumes: 
+                - /home/node/app/node_modules
+                - .:/home/node/app
+
+            tests: 
+                build:
+                context: .
+                dockerfile: Dockerfile.dev
+                volumes: 
+                - /home/node/app/node_modules
+                - .:/home/node/app
+                command: ["npm", "run", "test"]     
+        </code>
+
+        start the development environment by,
+        <strong>* <i>docker-compose -f docker-compose-dev.yml up --build</i></strong>
+
+        <strong>Note on dev environment</strong>
+        with volume bookmarking the copy . . instruction in the Dockerfile.dev is unnecessary but we might use 
+        this docker file as a starting point to create a production dockerfile.
+
+        And we need volume bookmarking in the development environment because otherwise, we had to rebuild the image 
+        every time we want to see the reflected changes in the source code to our running application.
+
+        <strong>* <i>docker attach &lt;container_id&gt;</i></strong>
+        why we can not attach to a running container's stdin, stdout, and stderr of a docker-compose built container?
+        when we running docker attach we always attaching to primary process of process id 1 not to any other process.
+
+
+        <strong>Production docker file for deployment</strong>
+            <i>Dockerfile</i>
+
+        <strong>Multi step build process</strong>
+        Lets say we created a React application containerized it in dev environment ran tests and now we want to serve it
+        by placing it on a live server. The application's build scripts ran and we got a bundle of minified static files of 
+        type html, js, css etc. now to serve that we need a HTTP server so,
+
+        we need 2 different base images from docker hub, one for building the image and one for serving the built static files.
+        Also, we do not need to have node_modules folder inside the built project and therefore it is not required to be included in the serving phase.
+        
+        So we do a multi-step docker build.
+        
+        1. build the app
+            use node:alpine > copy package.json > run npm install > run npm build
+        
+        2. serve/run the app
+            use node:nginx > copy over the result of npm run build > start nginx
+        
+        Dockerfile<code>
+            FROM node:21-alpine as builder
+            WORKDIR '/app'
+            COPY package.json .
+            RUN npm install
+            COPY . . 
+            RUN npm run build
+            
+            FROM nginx
+            COPY --from=builder /app/build /usr/share/nginx/html
+        </code>
+        </p>
+
+
+
+        <h2 id="ci-cd-primer">Continuous Integration & Continuous Deployment</h2>
+        <p >
+        <strong>Continuous integration with Travis CI</strong>
+        dev commit push to feature -> PR to master -> Travis runs test -> Merge PR -> Travis run test -> Deploy onto AWS
+
+        <i>project-root/.travis.yml</i>
+            1. we need docker running
+            2. create a development build because we need to test our app first
+            3. tell docker how to run the test
+            4. tell docker how to deploy our code to the cloud
+        </p>
+
+
+
+        <h2 id="single-container-deployment">Single Container Docker Project Deployment to AWS EBS</h2>
+        <p >
+        <strong>AWS Elastic Beanstalk Deployment</strong>
+        AWS beanstalk comes with a preinstalled load balancer that routes the incoming requests to a running node that has the least amount of load.
+
+        Follow AWS Cheat sheet for AWS Beanstalk configuration
+
+        1. Create an EBS application, that will prompt you to create an application environment
+        2. select platform type to Docker running on Amazon Linux v2
+        3. Configure IAM roles/policy to use with the EBS application
+        4. Configure S3 bucket that was automatically created during EBS application creation.
+        5. Create a new AWS IAM user by providing a user name, attach policies(permissions), and generate a new secret key 
+            that will return the "Access key" and "secret access key"
+        6. Add these keys to TravisCI > repository > settings > environment variables
+        7. Configure TravisCI to use the AWS access and secret key and create a deployment configuration.
+        8. Add this line to your production Dockerfile e.g., 
+            EXPOSE 80 # does not do anything by itself but instructs the AWS EBS to port map 80
+
+        <code>
+            # we need super user level access to execute this build, because we need docker
+            sudo: required 
+            services: 
+                - docker # travis will install docker because of this line
+
+            # contains a series of commands that gets executed before our test runs
+            before_install: 
+                - docker build -t protickr/docker-react -f Dockerfile.dev .
+
+            # list the commands as to what to do with the build and how to run this build
+            script: 
+                - docker run -e CI=true protickr/docker-react npm run test
+            # travis will watch for outputs of each of this commands and if any of the output returns non 0 value then 
+            # it is considered as error and our build failed
+
+            deploy: 
+                # TravisCI is pre-configured to deploy our app to different providers such AWS EBS, DigitalOcean etc.
+                provider: elasticbeanstalk 
+                
+                # aws region in which we created the AWS EBS app
+                region: "ap-southeast-2"  
+                
+                # EBS application name
+                app: "docker-react" 
+                
+                # the environment is where our application runs
+                env: "Docker-react-env" 
+                
+                # travis takes all the source code in our repository and zip them all up and upload them to a S3 bucket
+                bucket_name: "elasticbeanstalk-ap-southeast-2-460084874788"
+
+                # the same bucket will be used for multiple beanstalk application created in the same region
+                path: 'docker-react'
+
+                # trigger build only when commit is pushed to master
+                on: 
+                    branch: master
+
+                access_key_id: $AWS_ACCESS_KEY
+                secret_access_key: "$AWS_SECRET_KEY"
+        </code>
+
+        <strong>Production Docker Compose file</strong>
+        AWS EBS uses <i>docker-compose.yml</i> as default docker container deployment file.
+        <code>
+            version: '3'
+            services:
+                web:
+                build:
+                    context: .
+                    dockerfile: Dockerfile
+                ports:
+                    - '80:80'
+        </code>
+
+        <strong>Production Dockerfile</strong>
+        <i>Dockerfile</i>
+        <code>
+            FROM node:21-alpine as builder
+            WORKDIR '/app'
+            COPY package.json .
+            RUN npm install
+            COPY . . 
+            RUN npm run build
+
+            FROM nginx
+            EXPOSE 80 
+            COPY --from=builder /app/build /usr/share/nginx/html
+        </code>
+        <a href="https://github.com/protickr/docker-react" target="_blank">Source codes</a>
+        </p>
+
+
+
+        <h2 id="multi-container-deployment">Multi Container Docker Project Dev environment & Deployment to AWS EBS</h2>
+        <p >
+        <strong>Application Overview</strong>
+
+        <strong>Development</strong>
+        Nginx router &lt;-----&gt;|----&gt; Server/API (Express App) //  port 5000 -&gt;|---&gt; Redis     //  Port 6379 &lt;--- Worker (Generic Node app)
+                ^           |                                               |---&gt; Postgres  //  port 5432
+                ^           |
+                ^-----------|----&gt; Client     (React App)   //  port 3000
+        
+
+        <strong>Production</strong>
+        Nginx router &lt;-----&gt;|----&gt; Server/API (Express App) //  port 5000 -&gt;|---&gt; Redis     //  Port 6379 &lt;--- Worker (Generic Node app)
+                ^           |                                               |---&gt; Postgres  //  port 5432
+                ^           |
+                ^-----------|----&gt; Nginx Server //  port 3000 + Client Build files (React App)
+
+
+        <h3>Development Environment for multi container application</h3>
+        1. We will containerize Nginx router, server (Express app), client (React app), redis, postgres, worker (Node app)
+        2. All container will be built and run by docker-compose so the communication will be established within them using container's name
+        3. Environment variables will be set and passed to the containers using docker-compose file.
+        4. All docker file will be suffixed by .dev extension for development environment dockerfile.
+
+        All most all Dockerfile.dev for different application will follow this same
+        <strong><i>Server or Client or Worker/Dockerfile.dev</i></strong>
+        <code>
+            FROM node:21-alpine
+            
+            USER node 
+            RUN mkdir -p /home/node/app
+            WORKDIR /home/node/app
+            
+            COPY --chown=node:node package.json ./
+            
+            RUN npm install
+            
+            COPY --chown=node:node ./ ./
+            
+            CMD ["npm", "start"]
+        </code>
+
+
+        <strong><i>Setting Environment Variables for Docker containers</i></strong>
+        The environment variable is only available at the container runtime not in the build process or to the built image.
+        1. variableName=value; we will specify the variable and its value inside the docker-compose.yml file
+        2. variableName; the value for this environment will be taken from our machine.
+        <code>
+            environment:
+                - REDIS_HOST=redis
+                - REDIS_PORT=6379
+        </code>
+
+        <strong><i>Containerizing Nginx Router in Dev Env</i></strong>
+
+        <strong><i>Why</i></strong>
+            We have 2 servers 1 for backend 1 for frontend in our application.
+            HTML and JS requests will go to the frontend server
+            API requests will go to the express server
+
+        <strong><i>How</i></strong>
+        we wrote our source code for frontend part in a way that it requests for data from the backend by appending 
+        "/api" to the start of the URL and in the backend express application we defined our route without the /api prefix.
+        Now we will use the prefix to determine which request goes to which service.
+        
+        <strong><i>Nginx path routing - project-root/nginx/default.conf</i></strong>
+        <code>
+            upstream client {
+                server client:3000;
+            }
+
+            upstream api {
+                server api:5000;
+            }
+            
+            server {
+                listen 80;
+            
+                location / {
+                    proxy_pass http://client;
+                }
+            
+                location /api {
+                    rewrite /api/(.*) /$1 break;
+                    proxy_pass http://api;
+                }
+            
+                location /ws {
+                  proxy_pass http://client;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection "Upgrade";
+              }
+            }            
+        </code>
+
+        <strong><i>Nginx router container - project-root/nginx/Dockerfile.dev</i></strong>
+        <code>
+            FROM nginx
+            COPY ./default.conf /etc/nginx/conf.d/default.conf
+        </code>
+
+        <strong><i>Nginx container build instructions - project-root/docker-compose.yml</i></strong>
+        <code>
+        nginx: 
+            restart: always
+            depends_on:
+                - api
+                - client
+            build: 
+                dockerfile: Dockerfile.dev
+                context: ./nginx
+            ports:
+                - "3050:80" 
+        </code>
+
+        * we will use redis and postgres image from docker hub, pass build instructions and env variables to docker-compose file.
+        
+        <strong><i>docker-compose-dev.yml</i></strong>
+        <code>
+        version: '3'
+        services:
+            postgres: 
+            image: 'postgres:latest'
+            environment: 
+                - POSTGRES_PASSWORD=postgres_password
+            redis: 
+            image: 'redis:latest'
+        
+            nginx: 
+            restart: always
+            depends_on:
+                - api
+                - client
+            build: 
+                dockerfile: Dockerfile.dev
+                context: ./nginx
+            ports:
+                - "3050:80" 
+        
+            api: 
+            build: 
+                dockerfile: Dockerfile.dev
+                context: ./server
+            volumes:
+                - /home/node/app/node_modules
+                - ./server:/home/node/app
+            environment:
+                - REDIS_HOST=redis
+                - REDIS_PORT=6379
+                - PGUSER=postgres
+                - PGHOST=postgres
+                - PGDATABASE=postgres
+                - PGPASSWORD=postgres_password
+                - PGPORT=5432
+        
+            client: 
+            environment:
+                - WDS_SOCKET_PORT=0
+            build: 
+                dockerfile: Dockerfile.dev
+                context: ./client
+            volumes:
+                - /home/node/app/node_modules
+                - ./client:/home/node/app
+        
+            worker: 
+            environment:
+                - REDIS_HOST=redis
+                - REDIS_PORT=6379
+            build: 
+                dockerfile: Dockerfile.dev
+                context: ./worker
+            volumes:
+                - /home/node/app/node_modules
+                - ./worker:/home/node/app            
+        </code>
+
+
+        <h3><i>Production Deployment to AWS EBS</i></h3>
+        * Travis will build the production image and push to docker hub and notify AWS EBS to pull the prod image and deploy it.
+        * All most everything about building the images for our application remains the same but couple things to note here, 
+            1. We have to test the react app on our CI server i.e., Travis with dummy data, 
+                run the build script on React app, get the static files, serve those static files from a nginx server
+            2. We will not use our own redis and postgres container, instead we will use AWS ElastiCache and RDS
+            3. Create those services on AWS and set proper VPC and Security Rules and get the endpoints
+            4. Get AWS access key and secret key
+            5. Set env variables on the docker VM running on AWS EBS
+            6. AWS EBS no longer uses Dockerrun.aws.json file to deploy our application instead it uses docker-compose.yml file
+
+        <strong><i>Productions React App in docker with nginx </i></strong>
+        <strong><i>client/nginx/default.conf </i></strong>
+        <code>
+            server {
+                listen 3000; 
+            
+                location / {
+                    root /usr/share/nginx/html;
+                    index index.html index.htm;
+                }
+            }
+        </code>
+
+        <strong><i>client/Dockerfile</i></strong>
+            
+        <code>
+            FROM node:21-alpine as builder
+            WORKDIR '/app'
+            COPY ./package.json ./
+            RUN npm install
+            COPY . .
+            RUN ["npm", "run", "build"]
+            
+            FROM nginx
+            EXPOSE 3000
+            COPY ./nginx/default.conf /etc/nginx/conf.d/default.conf
+            COPY --from=builder /app/build /usr/share/nginx/html
+        </code>
+
+        <strong><i>production: project-root/docker-compose.yml</i></strong>
+        <code>
+            version: "3"
+            services:
+                client:
+                    image: "protickr/multi-client"
+                    mem_limit: 128m
+                    hostname: client
+                server:
+                    image: "protickr/multi-server"
+                    mem_limit: 128m
+                    hostname: api
+                    environment:
+                        - REDIS_HOST=$REDIS_HOST
+                        - REDIS_PORT=$REDIS_PORT
+                        - PGUSER=$PGUSER
+                        - PGHOST=$PGHOST
+                        - PGDATABASE=$PGDATABASE
+                        - PGPASSWORD=$PGPASSWORD
+                        - PGPORT=$PGPORT
+                worker:
+                    image: "protickr/multi-worker"
+                    mem_limit: 128m
+                    hostname: worker
+                    environment:
+                        - REDIS_HOST=$REDIS_HOST
+                        - REDIS_PORT=$REDIS_PORT
+                nginx:
+                    image: "protickr/multi-nginx"
+                    mem_limit: 128m
+                    hostname: nginx
+                    ports:
+                        - "80:80"
+        </code>
+
+        <strong><i>project-root/.travis.yaml</i></strong>
+        <code>
+            language: generic
+            sudo: 'required'
+            services:
+              - docker 
+            
+            before_install: 
+              - docker build -t protickr/react-test -f ./client/Dockerfile.dev ./client
+            
+            script: 
+              - docker run -e CI=true protickr/react-test npm run test
+            
+            after_success: 
+              - docker build -t protickr/multi-client ./client
+              - docker build -t protickr/multi-nginx ./nginx
+              - docker build -t protickr/multi-server ./server
+              - docker build -t protickr/multi-worker ./worker
+              # log in to the docker CLI
+              - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_ID" --password-stdin
+              # after building all images we need to push them to docker hub
+              - docker push protickr/multi-client
+              - docker push protickr/multi-nginx
+              - docker push protickr/multi-server
+              - docker push protickr/multi-worker
+            
+            
+            deploy:
+              provider: elasticbeanstalk 
+              on: 
+                branch: master
+              access_key_id: $AWS_ACCESS_KEY
+              secret_access_key: $AWS_SECRET_KEY
+            
+              region: "ap-southeast-2"
+              app: "multi-docker"
+              env: "Multi-docker-env"
+              bucket_name: "elasticbeanstalk-ap-southeast-2-460084874788"
+              path: 'multi-docker'            
+        </code>
+        <a href="https://github.com/protickr/multi-docker" target="_blank">Source Codes</a>
+
+        <strong><i>AWS</i></strong>
+
+        <strong>Why we don't containerize database services in production</strong>
+            because general data services like AWS RDS and AWS ElasticCache are optimized to perform better in 
+            production so no need to boot up our own services to use them. And also they are highly scalable 
+            and scaling is automatic. Automatic backup and rollbacks.
+
+        <strong>VPC - Virtual Private Cloud</strong>
+            Gets created by default when you create a service for your account only. You get one default VPC per 
+            region automatically.
+
+        <strong>security group (Firewall Rules)</strong>
+            A rule describing what different services or what different sources of internet traffic can connect to 
+            different services running inside your own VPC
+
+            1. When we created an EB instance a default security group was automatically created to allow any incoming 
+            traffic from anywhere to port 80 on your elastic beanstalk instance.
+
+            So when we create a service e.g., EC2, EBS, RDS etc. in AWS those services are created in their default VPC 
+            (A Virtual Private Network) we can add a Security Group (Firewall rules) to them to control inbound and 
+            outbound traffic to that VPC.
+
+            There is not billing associated with security group, its free
+
+        <strong>Config and Cheat Sheets</strong>
+            <a href="https://www.udemy.com/course/docker-and-kubernetes-the-complete-guide/learn/lecture/20676694#questions/20329762" 
+            target="_blank">AWS Config</a>
+        </p>
+
+
+
+        <h2 id="kubernetes-fundamentals">Kubernetes Fundamentals</h2>
+        <p >
+        <strong>Kubernetes</strong>
+        used to solve the scaling issues
+            
+        <strong>Kubernetes cluster</strong>
+        A cluster is a assembly of "master" and one or more "nodes" a "node" is a virtual machine or a physical computer 
+        that can be used to run some number of different containers. Each node can run a different sets of containers. 
+        Each of them can run different images of different numbers.
+        
+        <strong>Master</strong> manages all the nodes, it has a set of different running programs on it that control 
+        what each of the node is running at any given time. We interact with a Kubernetes cluster by reaching out 
+        to the Master. We give some set of directions to the master. Outside of the cluster we have a load balancer 
+        that takes some amount of requests and relay those requests into each of our  different nodes.
+        
+        <strong>Why</strong>
+        We specifically choose to use Kubernetes if we require to run multiple different types of images in multiple 
+        different types of containers. If you have only one type of container then it might not be beneficial to use 
+        Kubernetes.
+
+
+        <strong>Kubernetes in Development v/s Production</strong>
+        we use Kubernetes in development environment by using a program called minikube.
+        The sole purpose of <strong><i>minikube</i></strong> is to create a kubernetes cluster on your local machine.
+        When we use Kubernetes in Production we make use of something called managed solutions e.g., AWS EKS or GCP GKE
+
+        <strong><i>Minikube</i></strong>
+        is going to create a kubernetes cluster on your local machine, behind the scenes it essentially going to 
+        create a virtual machine whose sole purpose is going to be run some number of containers. 
+        Minikube creates a virtual machine / node. Local only
+        
+        <strong><i>Kubectl</i></strong>
+        to interact with the virtual machine / node we are going to use a program called Kubectl . 
+        Used locally and also in production.
+        
+        <strong>Kubernetes via Docker Desktop</strong>
+        If we did not install kubernetes via docker desktop's "enable kubernetes" option then we would need to install 
+        kubectl, a VM driver like virtualbox and  minikube
+        Also, the docker desktop's built-in Kubernetes with WSL2 on Windows does not require us to create the Kubernetes 
+        cluster on a virtual machine it is automatically created for us and we can communicate with it through 
+        the kubectl tool.
+
+        <strong><i>Kubernetes requirements</i></strong>
+            1. Kubernetes expects us to have all the images already built we can not hand over build specifications 
+                like docker-compose.yml to Kubernetes.        
+            2. One config file per object we want to create. An Object does not necessarily mean a container.
+            3. We have to manually set up all networking.
+
+        <strong>How we will do it?</strong>
+            1. Make sure our image is hosted on the docker hub.        
+            2. Make one config file to create the container.
+            3. Make one config file to setup networking.
+
+
+        <strong><i>Kubernetes Pod and NodePort object</i></strong>
+        
+        <strong>Pod</strong>
+        <strong><i>project-root/client-pod.yaml</i></strong>
+        <code>
+            apiVersion: v1
+            kind: Pod
+            metadata: 
+            name: client-pod
+            labels: 
+                component: web
+            spec: 
+            containers: 
+                - name: client
+                image: stephengrider/multi-client
+                ports: 
+                    - containerPort: 3000
+        </code>
+
+        <strong>NodePort</strong>
+        <strong><i>project-root/client-node-port.yaml</i></strong>
+        <code>
+            apiVersion: v1
+            kind: Service
+            metadata: 
+              name: client-node-port 
+            spec: 
+              type: NodePort
+              ports: 
+                - port: 3050
+                  targetPort: 3000
+                  nodePort: 31515
+              selector: 
+                component: web
+        </code>
+
+        <strong>Explanation</strong>
+            Each config file crates an object inside our Kubernetes cluster
+            we feed the config files to kubectl and it creates objects. Object can be of different types such as,
+
+            <strong>Object types</strong>
+            StatefulSet
+            ReplicaController
+            Pod - is used to run a container.
+            Service - is used to setup some kind of networking.
+
+            These are things that we can create inside Kubernetes cluster that have very specific purposes to make our 
+            application work the way we expect.
+
+            1. The "kind" property inside the configuration file refers to the type of Object we want to make inside the 
+                Kubernetes cluster.
+            2. "apiVersion" Controls the types of objects that we can specify to use in any given configuration file.
+
+        
+        <strong>What is a Pod and how to use them</strong>
+        
+        <strong>* <i>minikube start</i></strong>
+
+        started a Virtual Machine - VM on your local computer that we are referring to as Node
+        
+        That node will be used by Kubernetes to run some number of different objects. Pod is a type of object. 
+        When we pass in a configuration file to kubectl it will create a Pod inside that VM/Node if 
+        we specify the kind: Pod
+        
+        A Pod is essentially a grouping of containers with a very common purpose. In the world of Kubernetes there 
+        is no way of running a bare-bone container with no associated overhead unlike Elastic Beanstalk or Docker Compose.
+        
+        <strong>We always will be deploying a Container within a Pod</strong>
+
+        *** When we deploy a grouping of Containers - Pod
+            in our Kubernetes cluster, we must group the containers that are very tightly coupled such as one container 
+            can not function without the other.
+
+
+        <strong>Explanation continues</strong>
+        "metadata:"             # Pod's metadata
+            "name: client-pod"  # Pod's name
+        labels:
+            component: web      # it can be used to reference this Pod Object from another running Object 
+                                # inside our Kubernetes cluster.
+        spec:                   # Pod's specification - containers and their information
+            - name: container-name   
+            image: from-which-image-to-build-the-container
+        ports:
+            - containerPort: 3000 # which port of the container is exposed to the outside
+
+
+        <strong>Sub-type of "Service" type Object</strong>
+
+        <strong>Services - sets up networking in a Kubernetes cluster. Services Object type has 4 commonly used subtypes:</strong>
+            1. ClusterIP
+            2. NodePort     # exposes a container to the outside world (only good for dev purposes!)
+            3. LoadBalancer
+            4. Ingress
+
+        <strong><i>Kube-proxy</i></strong>
+        Every single node/VM running on our Kubernetes Cluster has a program running called kube-proxy. Kube proxy is one 
+        single window to the outside world, meaning it is the only relay we can use to communicate with the running 
+        Object inside the Node/VM
+
+
+        <strong>How to target one Kubernetes Object from other object</strong>
+        *** Kubernetes Objects use <i>labels:selector</i> mapping to target one Object from another Running object. 
+        Eg. a Service object might target a Pod object running in the same node/VM on a Kubernetes cluster.
+
+
+        <strong>Port binding of NodePort</strong>
+        ports: 
+            - port: 3050        # other POD might connect to multi-client POD through this port
+              targetPort: 3000    # multi-client POD's exposed port
+              nodePort: 31515     # exposed port of the Node to the outside world
+        
+        if we omit specifying nodePort inside our config file then a random port from 30000 - 32767 will be 
+        assigned to our multi-client Pod's port mapping.
+
+
+        <strong>Using Kubernetes</strong>
+        
+        <strong>* <i>kubectl apply -f &lt;file_name&gt;</i></strong>
+        Feed a config file to Kubectl
+        
+        <strong>* <i>kubectl get services</i></strong>
+        <strong>* <i>kubectl get pods</i></strong>
+        Get status of Objects running
+        
+        <strong>* <i>minikube ip</i></strong>
+        Get the IP of the running Node/VM
+
+
+        <strong>Kubernetes environment itnernals</strong>
+
+        Inside master there are 3 or 4 programs running
+        1. one such program is <strong><i>kube-apiserver</i></strong> is responsible for monitoring the current status 
+            of all the different nodes inside of your cluster and ensuring they are essentially doing the correct thing
+        2. The master has some kind of notepad of sorts that records all of its responsibilities. All the things 
+            that we told it to do in the form of these deployment/config yaml files.
+        3. Master always polls the running nodes inside the Kubernetes cluster and verifies that the nodes are 
+            running appropriate services in instructed numbers, if not it tries to start required services automatically 
+            inside any random node.
+
+        
+        <strong>Kubernetes summary</strong>
+        1. Kubernetes is a system to deploy containerized apps.        
+        2. Nodes are individual machines (or VMs) that run containers.
+        3. Masters are machines (or VMs) with a set of programs to manage nodes.
+        4. Kubernetes did not build our images - it got them from somewhere else.
+        5. By default, Kubernetes (the master) decides where to run each container - each node can run 
+            a dissimilar set of containers.
+        6. To deploy something, we update the desired state of the master with a config file.
+        7. The master works constantly to meet your desired state.
+
+
+        <strong>Imperative v/s Declarative Deployment style</strong>
+        Imperative - Do exactly these steps to arrive at this container setup.        
+        Declarative - Our container setup should look like this, make it happen.
+
+
+        <strong>Updating an existing object running inside our Kubernetes cluster</strong>
+        Every single time we take a configuration file and pass it into kubectl, the master is going to 
+        look at this configuration file and look at its name and kind properties it is then going to look 
+        at all the running services inside the cluster, if there is any other object inside the cluster with 
+        the same name and kind property then it will update the existing running Object as specified in the 
+        configuration file passed to it.
+        
+        If we made changes to the name then master will create a new object.
+
+
+        <strong>Update limitations and work around</strong>
+        
+        <strong>* <i>kubectl describe &lt;object_type&gt; &lt;object_name&gt;</i></strong>
+            Inspecting a running Pod
+        
+        <strong>Update limitations</strong>
+        We are only allowed to update the container image specification, activeDeadlineSeconds, tolerations 
+        other than that everything else is not updatable.
+        
+        <strong>Workaround for Update limitations</strong>
+        We can make use of a new type of Kubernetes object called <strong><i>'Deployment'</i></strong>
+
+        <strong>Deployment Object:</strong> 
+            A Kubernetes object that is meant to maintain a set of identical Pods. The 
+            deployment object is going to constantly work to make sure that every single Pod it supposed 
+            to manage always running the correct configuration and is always in a runnable state.
+
+            A Deployment object is very similar in nature to a Pod
+
+            Pod Runs a single set of containers generally in the development process and is not suitable for use in 
+            production directly.
+            
+            Deployment Meant to run, monitor, and manage a set of identical Pods. It is good for the development environment 
+            as well as for production.
+            
+        <strong>Example Deploy object configuration</strong>
+        
+        <strong><i>simplek8s/client-deployment.yaml</i></strong>
+        <code>
+            apiVersion: apps/v1
+            kind: Deployment                                # create deployment object in k8s cluster
+            metadata: 
+                name: client-deployment                     # name of the object
+            spec: 
+                replicas: 1                                 # number of Pod to be created
+                selector:                                   # getting a handle on, to be created pod
+                    matchLabels: 
+                        component: web
+                template:                                   # configuration for Pod to be created
+                    metadata:     
+                    labels:                                 # tagging the Pod
+                        component: web
+                    spec: 
+                        containers:                             # configuration of container to be created inside the pod 
+                            - name: client
+                            image: stephengrider/multi-client   # image name
+                            ports:    
+                                - containerPort: 3000           # port mapping
+        </code>
+
+        <strong>How label:selector works</strong>
+        Kubernetes cluster-master will create a specified number of Pod according to replicas: 1  property, tag it with
+        labels:
+           component: web
+
+        The deployment object will get a handle on it via
+          selector:
+            matchLabels: 
+              component: web
+
+        <strong>* <i>kubectl delete -f &lt;config_file&gt;</i></strong>
+
+        Remove existing object/Pod/Service from the k8s cluster
+
+
+        <strong>Why do we need a service (Networking) object?</strong>
+        
+        <strong>* <i>kubectl get pods -o wide</i></strong>
+        
+        Every single pod we create gets assigned its own unique IP address, internal to our virtual machine/ Node. 
+        If for any reason like update, delete, or something else the Pod might get a brand new IP address. 
+        The subject to change IP address of a Pod might become a hassle to use in development which is why we use 
+        the "service" object.
+        
+        The service object will watch out for any Pod that matches its selectors. And automatically route 
+        traffic directly to any matching Pod.
+        
+        <strong>* <i>kubectl get deployments</i></strong>
+        get information about the deployment object type
+
+
+        <strong>How to update a deployment when a new version of image is available</strong>
+        
+        If there is no change in the config file the kubectl apply will right out reject it.
+        
+        <strong>Solutions</strong>
+        1. manually deleting the pod the deployment object has created then the deployment object will notice 
+            that it has one pod missing so it will recreate the pod with the latest image from dockerhub. Silly solution.
+        
+        2. Tagging the image with a version number and specifying that version to the updated config file, 
+            that will trigger a change because the config file has been updated so the deployment object will 
+            create/update new/existing pod from the latest image. We need to inject the version number 
+            into the config file, not a very good solution.
+        
+        3. Use an imperative command to update our deployment. Imperative approach is not recommended. 
+            But this is the best of a bad situation
+
+
+        <strong>Imperatively updating a Deployment Object's image</strong>
+        
+        <strong>* <i>kubectl set &lt;Property_to_update&gt; &lt;Object_type&gt; / &lt;Object_name&gt; &lt;Container_name&gt; = &lt;New_property_value&gt;</i></strong>
+        <strong>* <i>kubectl set image deployment/client-deployment client=protickr/multi-client:v4</i></strong>
+
+        *** we use kubectl set command to update properties of existing Object running in our kubernetes cluster.
+
+        
+        <strong>Inspecting Pods</strong>
+        
+        <strong>* <i>kubectl get pods</i></strong>
+
+        <strong>* <i>kubectl logs &lt;pod_id&gt;</i></strong>
+        
+        <strong>* <i>kubectl exec -it &lt;pod_id&gt; sh</i></strong>
+
+
+        <strong>Request from browser to Pod</strong>
+            Each and every request to our Kubernetes virtual machine/node passes through kube-proxy by default. 
+            And from the kube-proxy it goes to Service Object running inside our Node which is responsible 
+            for network routing, we can use a NodePort service or an <strong><i>Ingress Service</i></strong>
+        </p>
+
+
+
+        <h2 id="multi-pod-local-kubernetes">Multiple Images in Local Kubernetes Cluster</h2>
+        <p >
+        <strong>Kubernetes workflow for development and production</strong>
+        1. Create config files for each service (Router), deployment object (Container), and 
+            Persistent Volume Claim (PVC) for Postgres Pod.
+        2. Test locally on minikube/kubernetes cluster.
+        3. Create a GitHub/Travis flow to build images and deploy.
+        4. Deploy the app to a cloud provider.
+
+
+        <strong>ClusterIP</strong>
+        We use Service Object any time we want to set up some networking for some object e.g., a single pod or a 
+        group of pods that are managed by a Deployment Object inside our cluster.
+        
+        "NodePort" Service Object Exposes a set of pods to the outside world.
+        "ClusterIP" Service Object Exposes a set of pods to other objects in the cluster.
+        
+        * Unlike NodePort Service ClusterIP Service does not have a targetPort property in its port mapping because 
+            the ClusterIP Service Object is not accessible from outside the cluster.
+        
+        <strong><i>complex/k8s/client-cluster-ip-service.yaml</i></strong>
+        <code>
+            apiVersion: v1
+            kind: Service
+            metadata: 
+                name: client-cluster-ip-service
+            spec: 
+                type: ClusterIP
+                selector: 
+                    component: web
+                ports:
+                    - port: 3000 # at this port other cluster object will access ClusterIP object                    
+                    targetPort: 3000  # at this port the request will be relayed to the target object
+        </code>
+
+        <strong>Deleting previously created Deployment objects from our Kubernetes cluster</strong>
+        
+        <strong>* <i>kubectl get deployment</i></strong> 
+        # get the list of all deployment objects
+        
+        <strong>* <i>kubectl delete deployment &lt;deployment_object_name&gt;</i></strong>
+        
+
+        <strong>Apply all the configuration files at once from a directory</strong>
+        
+        <strong>* <i>kubectl apply -f &lt;directory_path&gt;</i></strong>
+
+        <strong>Single config file for multiple configs</strong>
+        *** We can keep several different object configurations into one single configuration file
+            we just have to separate configs for different objects with three dashes, ---
+
+
+        <strong>Persistent Volume Claim (PVC)</strong>
+        It is similar to Docker's volume mapping. When we try to access the storage of the host machine inside our docker 
+        container we use Volume mapping or Persistent Volume Claim in Kubernetes
+
+        <strong><i>Volume & Persistent Volume Claim - PVC & Volume Claim</i> </strong>
+        kubernetes cluster
+                node
+                    deployment object
+                        pod
+                            container
+                                postgres
+                                filesystem
+                                    database data
+
+        if for any reason the postgres pod crashes the deployment object will clean up the crashed pod and launch 
+        a new pod and with the clean up our postgres database data will be lost
+        we can make use of volume to have a consistent file system that can be accessed by a database such as postgres.
+
+        <strong>volume in a generic container terminology</strong>
+        some type of mechanism that allows a container to access a filesystem outside itself
+        
+        <strong>volume in Kubernetes</strong>
+        The term volume is a reference to a  very particular type of object. We can create a configuration file 
+        that will create a volume it is a type of object in Kubernetes. It is an object that allows a 
+        container to store some persistent data at the Pod level.
+        
+        In addition to Volumes, we have access to 2 other types of data storage mechanisms, 
+            Persistent Volume Claim, and Persistent Volume        
+        <strong>These are not as same as the Docker's Volume.</strong>
+
+        <strong>Volume:</strong> tied to the Pod if the container crashes and a  new container is started it can access the 
+            Volume object but if the Pod is deleted then the Volume object gets deleted with it.
+
+        <strong>Persistent Volume:</strong> with this kind of Kubernetes object we are creating a very durable long-lasting storage 
+        that is not tied to any specific Pod or any specific container.
+
+        <strong>Persistent Volume Claim:</strong> These are advertisements, not actual storage, it is the advertisement 
+        of different Persistent Volume options that we have access to in this particular cluster. We 
+        will write different Persistent Volume Claims inside some config files that will be available inside our cluster.
+        
+        <strong>Statically Provisioned Persistent Volume</strong> that we have created ahead of time.
+        
+        <strong>Dynamically Provisioned Persistent Volume</strong> that could have been created on the fly.
+
+
+        <strong>PVC Config</strong>
+        <code>
+            apiVersion: v1
+            kind: PersistentVolumeClaim
+            metadata: 
+            name: database-persistent-volume-claim
+            spec: 
+            accessModes: 
+                - ReadWriteOnce
+            resources:
+                requests: 
+                storage: 2Gi
+        </code>
+
+        <strong>Notes on PVC</strong>
+        1. A volume claim is not an actual instance of storage
+        2. A volume claim is something that we are going to attach to a pod's config
+
+        <strong>Access Modes</strong>
+            <strong>ReadWriteOnce</strong> Can be used by a single node to read and write
+            
+            <strong>ReadOnlyMany</strong> Multiple node can read from this but can not write to it
+            
+            <strong>ReadWriteMany</strong> Can be read and written to by Many nodes
+
+        
+        PersistentVolumeClaim is asking Kubernetes for a Persistent Volume / Storage space
+        
+        <strong>On Local Machine:</strong>
+            Kubernetes has a storage option available is our hard drive, a slice of our local computer's 
+            hard drive will be provisioned for the persistent volume.
+        
+        <strong>* <i>kubectl get storageclass</i></strong>
+        # returns available storage class on a kubernetes cluster
+
+        <strong>* <i>kubectl describe storageclass</i></strong>
+
+        In a cloud environment a lot of different storage class is available such AWS Block Store, 
+        Google Persistent Disk, Azure File, Azure Disk etc.
+        
+        If we do not specify the storage class property it will be minikube-hostpath or hostpath which will 
+        allocate disk storage for our persistent volume in our local machine
+        
+        When we deploy our application on the Kubernetes cluster of different cloud provider the 
+        standard/default option will be set to their storage solution/option by default.
+
+
+        <strong>Using PVC</strong>
+        Adding PersistentVolumeClaim Object to a Pod's configuration
+
+        <strong><i>complex-k8s/postgres-deployment.yaml</i></strong>        
+            spec: 
+              volumes: 
+                - name: postgres-volume
+                  persistentVolumeClaim:                        # asks Kubernetes for storage
+                    claimName: database-persistent-volume-claim 
+
+              containers: 
+                - name: postgres
+                  image: postgres
+                  ports: 
+                    - containerPort: 5432
+
+                  volumeMounts:                                  # using allocated storage for pod to a container
+                    - name: postgres-storage                        
+                      mountPath: /var/lib/postgresql/data # if postgres writes to this directory then write these data to persistent volume
+                      subpath: postgres # special for postgres to work properly
+
+
+        <strong>* <i>kubectl get pv</i></strong>
+        get a list of Persistent Volumes
+        
+        <strong>* <i>kubectl get pvc</i></strong>
+        get a list of Persistent Volume Claims
+
+
+        In multi-container, in this case multi Pod application we can connect to a Pod from other Pod through the target 
+        Pod's ClusterIP service
+
+        For example, if we want to connect to Redis pod from the server pod we can connect to that by using the 
+            Redis pod's ClusterIP service object's name, redis-cluster-ip-service.
+        
+
+        <strong>Also, we need to create secret variable for our Kubernetes cluster if the environment variable 
+        is a password or some secret access key.</strong>
+
+        
+        <strong>Setting Environment variables</strong>
+
+        <strong><i>complex-k8s/worker-deployment.yaml</i></strong>
+        <code>
+            containers: 
+            - name: worker
+                image: protickr/multi-worker
+                env: 
+                - name: REDIS_HOST
+                    value: redis-cluster-ip-service
+                - name: REDIS_PORT
+                    value: 6379
+            </code>
+
+        <strong><i>complex-k8s/postgres-deployment.yaml</i></strong>
+        <code>
+            containers: 
+            - name: server 
+                image: protickr/multi-server
+                ports: 
+                - containerPort: 5000
+                env: 
+                - name: REDIS_HOST
+                    value: redis-cluster-ip-service
+                - name: REDIS_PORT
+                    value: 6379
+                - name: PGUSER
+                    value: postgres
+                - name: PGHOST
+                    value: postgres-cluster-ip-service
+                - name: PGPORT
+                    value: 5432
+                - name: PGDATABASE
+                    value: postgres
+        </code>
+
+
+        <strong>"Secret" - Kubernetes Object</strong>
+        We use this object to create an encoded secret e.g., database password, and use that to access our database.
+        
+        *** To create a Kubernetes object we use config files but for creating a secret we will be using an imperative 
+        command. Because we do not want to write out the password in plain text inside a config file that would defeat 
+        the whole purpose of creating a secret variable in the first place
+
+        Secret variables are stored in the Kubernetes cluster.
+
+        <strong>The create command to create any Kubernetes Object</strong>
+        <strong>* <i>kubectl create &lt;object_type&gt; &lt;object_sub_type&gt; &lt;object_name&gt; --from-literal key=value (or -f fileName)</i></strong>
+
+        <strong>Creating a Kubernetes Secret Variable</strong>
+        <strong>* <i>kubectl create secret generic pg-password --from-literal PGPASSWORD=POSTGRES_PASSWORD</i></strong>
+
+        <strong>* <i>kubectl get secrets</i></strong>
+        Get a list of secrets
+
+        <strong>Accessing secret variable's value inside Config file</strong>
+        <code>
+            - name: PGPASSWORD
+                valueFrom: 
+                secretKeyRef: 
+                    name: pg-password
+                    key: PGPASSWORD
+        </code>
+
+        <strong>Whenever you provide value for an environment variable inside a Kubernetes config file you have 
+            to provide it as a string.</strong>
+
+
+        <strong>LoadBalancer - Service Object</strong>
+        Legacy way of getting network traffic into a cluster, Ingress is a newer and supposedly better way of 
+        getting network traffic into a cluster.
+        
+        A LoaderBalancer does 2 separate things inside your cluster,
+        1. LoadBalancer will only give you access to one set of Pods inside your cluster
+        2. Kubernetes will ask the Cloud provider for a Standard/Classic/Application load balancer in the background
+
+
+        <strong>Ingress Service Object</strong>
+        In Kubernetes, there are several different implementations of an Ingress Service. We will be using Ingress Nginx
+        setup of ingress-nginx changes depending on your environment (local, GC, AWS, Azure)
+
+
+        <strong>Object Type - Controller</strong>
+        
+        Deployment Object is also a type of 'controller'
+        In Kubernetes, a controller is any type of object that constantly works to make some desired state a reality 
+        inside our cluster.
+        
+        An ingress service object is also a type of controller, we write ingress routing rules that will be used to route 
+        network traffic inside our cluster's ClientIP services.
+        
+        The ingress controller will constantly monitor and manage something that will facilitate proper networking 
+        inside our Kubernetes cluster. That something will be responsible for accepting all incoming requests to our 
+        cluster and route them to proper services.
+
+        
+        <strong><i>Why Ingress Nginx instead of LoadBalancer + Nginx</i></strong>
+        Because ingress-nginx is specific to Kubernetes cluster deployment, It will route the traffic directly to the Pods 
+        created by Deployment Object bypassing the ClusterIP service we attached to it.
+        
+        One of the benefits of using it instead of nginx is a <strong><i>sticky session</i></strong> when a user sends two 
+        simultaneous requests to one service e.g., API then ingress-nginx makes sure to send these two requests to the 
+        same Pod.
+        
+        <strong>Google Cloud deployment</strong>
+        It will automatically create a LoadBalancer service that we had previously avoided using in favor of Ingress Service.
+        
+        So as it stands, GKE will attach a LoadBalancer Service and send incoming requests through it we will receive that 
+        incoming request on a Pod managed by our Ingress Controller and from there ingress-nginx will route that traffic 
+        directly to our Service Pods.
+
+        <strong>Using ingress-nginx in our Docker Desktop Kubernetes Cluster environment</strong>
+
+        1. https://kubernetes.github.io/ingress-nginx/deploy/#quick-start
+            and apply an appropriate kubectl apply command to enable ingress nginx resources.
+
+        2. <i>project-root/k8s/ingress-service.yaml</i>
+        <code>
+            apiVersion: networking.k8s.io/v1
+            kind: Ingress
+            metadata:
+              name: ingress-service
+              annotations:
+                nginx.ingress.kubernetes.io/use-regex: 'true'
+                nginx.ingress.kubernetes.io/rewrite-target: /$1
+            spec:
+              ingressClassName: nginx
+              rules:
+                - http:
+                    paths:
+                        - path: /?(.*)
+                            pathType: ImplementationSpecific
+                            backend:
+                            service:
+                                name: client-cluster-ip-service
+                                port:
+                                number: 3000
+                        - path: /api/?(.*)
+                            pathType: ImplementationSpecific
+                            
+                            backend:
+                                service:
+                                    name: server-cluster-ip-service
+                                    port:
+                                    number: 5000
+        </code>
+
+        <strong>ERROR</strong>
+        Error from server (InternalError): error when creating "k8s/ingress-service.yaml": Internal error occurred: 
+        failed calling webhook "validate.nginx.ingress.kubernetes.io": failed to call webhook: 
+        Post "https://ingress-nginx-controller-admission.ingress-nginx.svc:443/networking/v1/ingresses?timeout=10s": 
+        dial tcp 10.97.156.129:443: connect: connection refused
+        
+        <strong>* <i>kubectl apply -f complex-k8s/ingress-service.yaml</i></strong>
+
+        <strong>Reason</strong>
+        Our firewall might be blocking requests to the validation API at 10.97.156.129:443
+        Or the API might refuse to accept connection from a HTTP server as ours (My assumption)
+        
+        <strong>Solution</strong>
+        1. we don't need to validate our ingress configuration
+        kubectl delete validatingwebhookconfiguration ingress-nginx-admission
+        </p>
+
+
+
+        <h2 id="multi-pod-kubernetes-ci-cd">Multiple Images Kubernetes App CI/CD</h2>
+        <p >
+        <strong>GCP GKE Deployment workflow</strong>
+        1. create a git repo and push it to github
+        2. link the repo to Travis CI
+        3. create a GCP project
+        4. Create a Kubernetes cluster
+        5. Specify nodes and their configs
+        6. Write Travis Config file
+        7. Install Google Cloud SDK into Travis
+        8. create a Kubernetes engine admin user on GCP and generate a JSON key file
+        9. Use that to log in to GCP from Travis.        
+        10. download and install Travis CLI on our local machine to encrypt the key JSON file.
+        11. log in to the docker CLI of hub.docker.com to push images from Travis's build
+        12. Build and test images of appropriate project parts.
+        13. If tests successfully passed, build image and push them to docker hub
+
+        <strong>Encrypting Service-acount.json Key file</strong>
+        we created a service account on GCP for our Kubernetes cluster it returned a credentials file in json format 
+        but we can not commit this file to github so we have to encrypt it in a way so that we can use it in travis 
+        travis allow us to encrypt a credentials file that we can use on travis 
+        
+        instead of installing ruby and gem on our local machine we will install it on a docker container
+        <code>
+            docker run -it -v $(pwd):/app ruby sh
+    
+            $ gem install travis
+            
+            $ travis login --github-token <my_github_token> --com
+            
+            $ travis encrypt-file service-account.json -r protickr/multi-k8s --com
+            // returns 
+            openssl aes-256-cbc -K $encrypted_9f3b5599b056_key -iv $encrypted_9f3b5599b056_iv -in service-account.json.enc 
+            -out service-account.json -d
+        </code>
+
+        1. commit service-account.json.enc file
+        2. modify .travis.yaml file with the returned openssl string
+
+        <strong>Creating a deployment Script</strong>
+        
+        Important Pre-requisite for Travis Deployment.
+            1. Travis already had built in facility to deploy a docker app on AWS EBS but it has no such thing for deployment 
+            on GCP GKE. So we need to create a deployment script as well.
+            
+            2. Also, updating an image of a Pod with latest code changes is challenging and requires a little work-around
+                we can achieve that by tagging our images with the current commit hash and we also have to apply the 
+                imperative command to update the image somehow.
+
+                <strong>* <i>git rev-parse HEAD</i></strong>
+                # commit hash of the currently selected commit
+
+                <strong>Disable gcloud prompts that require user interaction</strong>
+                # because we can not respond to prompts in travis build context
+                    - CLOUDSDK_CORE_DISABLE_PROMPTS=1 
+
+
+        Including all these the final 
+            <strong><i>project-root/.travis.yml</i></strong>
+        <code>
+            sudo: required
+            dist: focal  # Specify the Ubuntu distribution
+            services: 
+              - docker
+            env:  # environment variables for Travis
+              global: 
+                - SHA=$(git rev-parse HEAD)
+                - CLOUDSDK_CORE_DISABLE_PROMPTS=1
+                - CLOUDSDK_PYTHON=python3.8
+            
+            before_install:
+              - openssl aes-256-cbc -K $encrypted_9f3b5599b056_key -iv $encrypted_9f3b5599b056_iv -in service-account.json.enc -out service-account.json -d
+              - curl https://sdk.cloud.google.com | bash > /dev/null;
+              - source $HOME/google-cloud-sdk/path.bash.inc
+              - gcloud components update kubectl
+              - gcloud auth activate-service-account --key-file service-account.json
+              - gcloud config set project muli-k8s-404706
+              - gcloud config set compute/zone us-central1-f
+              - gcloud container clusters get-credentials multi-cluster
+              - echo $DOCKER_PASSWORD | docker login -u "$DOCKER_USERNAME" --password-stdin
+              - docker build -t protickr/react-test -f ./client/Dockerfile.dev ./client
+            script:
+              - docker run -e CI=true protickr/react-test npm run test
+            
+            deploy: 
+              provider: script
+              script: bash ./deploy.sh
+              on: 
+                branch: master
+        </code>
+
+        <strong><i>project-root/deploy.sh</i></strong>
+        <code>
+            docker build -t protickr/multi-client:latest -t protickr/multi-client:$SHA -f ./client/Dockerfile ./client
+            docker build -t protickr/multi-server:latest -t protickr/multi-server:$SHA -f ./server/Dockerfile ./server
+            docker build -t protickr/multi-worker:latest -t protickr/multi-worker:$SHA -f ./worker/Dockerfile ./worker
+            
+            docker push protickr/multi-client:latest
+            docker push protickr/multi-client:$SHA
+            
+            docker push protickr/multi-server:latest
+            docker push protickr/multi-server:$SHA
+            
+            docker push protickr/multi-worker:latest
+            docker push protickr/multi-worker:$SHA
+            
+            kubectl apply -f k8s/
+            
+            kubectl set image deployment/client-deployment client=protickr/multi-client:$SHA
+            kubectl set image deployment/server-deployment server=protickr/multi-server:$SHA
+            kubectl set image deployment/worker-deployment worker=protickr/multi-worker:$SHA
+        </code>
+        </p>
+
+
+
+        <h2 id="multi-pod-gke-deployment">Multiple Images Kubernetes App Deployment in GCP GKE</h2>
+        <p >
+        <strong>GCP GKE Cluster Creation</strong>
+        <a href="https://www.udemy.com/course/docker-and-kubernetes-the-complete-guide/learn/lecture/25406546#content" target="_blank">Creating GKE Cluster</a>
+
+        <strong>GCP GKE Service Account </strong>
+        <a href="https://www.udemy.com/course/docker-and-kubernetes-the-complete-guide/learn/lecture/25408376#content" target="_blank">Create GKE Service Account</a>
+
+
+        <strong>Preparing our Google Cloud Kubernetes Cluster</strong>
+        we have to manually do it on the Google Cloud console's kubernetes cluster
+
+        <strong>1. create a secret variable</strong>
+        go to Google Cloud Console> activate cloud shell > create a secret
+
+        <strong>2. ingress-nginx installation in your cluster with helm</strong>
+        go to Google Cloud Console> activate Cloud Shell> install helm, apply ingress-nginx
+                
+        <i>helm is a package manager for kubernetes, helm was already installed in Google Cloud console shell so 
+            installed and applied ingress-nginx by</i>
+        <strong>* <i> helm upgrade --install ingress-nginx ingress-nginx \  
+                --repo https://kubernetes.github.io/ingress-nginx \  
+                --namespace ingress-nginx --create-namespace        
+        </i></strong>
+        
+        <strong>* <i>kubectl get service ingress-nginx-controller --namespace=ingress-nginx</i></strong>
+        check if ingress-nginx was deployed on our cluster
+
+
+        <strong>Role Based Access Control (RBAC)</strong>
+            1. Limits who can access and modify objects in our cluster
+            2. Enabled on Google Cloud by default
+            3. Tiller wants to make changes to our cluster, so it needs to get some permissions set.
+        In our local development environment RBAC was not enabled by default so any Pod inside our cluster could access 
+        the cluster directly and change any configuration they want but on GKE RBAC is enabled by default.
+
+        <strong>RBAC terms</strong>
+            "User Accounts" identifies a "person" administering a cluster
+            "Service Accounts" identifies a "Pod" administering a cluster
+            "ClusterRoleBinding" Authorizes an account to do a certain set of actions across the entire cluster
+            "RoleBinding" Authorizes an account to do a certain set of actions in a single namespace
+        
+        <strong>Namespaces:</strong>
+            <strong>* <i>kubectl get namespaces</i></strong>
+
+        <strong>The following commands are no longer required to be executed on GKE terminal</strong>
+            1. <strong>* <i>kubectl create serviceaccount --namespace kube-system tiller</i></strong>
+            2. <strong>* <i>kubectl create clusterrolebinding tiller-cluster-rule --clusterrole=cluster-admin --serviceaccount=kube-system:tiller</i></strong>     
+        </p>
+
+
+
+        <h2 id="gck-gke-https">HTTPS Configuration for Kubernetes Application</h2>
+        <p >
+        <strong>How this works</strong>
+        LetsEncrypt I need a TLS certificate for a web application running on this domain somedomain.com
+        - okay reply to this URL on your web application: somedomain.com/some-path-lets-encrypt-asked
+        - here is the response on this path
+        - here is your certificate valid for 90 days.
+        
+        <strong>How to implement</strong>
+        We will use helm to install a plugin that will automatically do this process for us
+        1. buy a domain
+        2. add @ and cname records
+        3. in your GCP cloud shell run the following,
+        
+        <strong>* <i>helm repo add jetstack https://charts.jetstack.io</i></strong>
+         
+        <strong>* <i>helm install \
+          cert-manager jetstack/cert-manager \
+          --namespace cert-manager \
+          --create-namespace \
+          --version v1.8.0 \
+          --set installCRDs=true
+        </i></strong>
+
+        Installing Cert Manager on our Kubernetes cluster will essentially create some objects in our cluster 
+        and a Pod that will respond to LetsEncrypt's verification requests.
+
+        Additionally, the cert-manager application requires two more objects created in our cluster to operate we 
+        will create them by creating two more config files in our project.
+        
+        "Issuer"             e.g., use LetsEncrypt and use its API URLs
+        "Certificate"   details the exact nature of the certificate that we want to obtain. The certificate object 
+        will also have a Kubernetes secret variable. We will not create it cert-manager will create it and we 
+        will provide the name of the secret.
+        
+        Finally, we have to reconfigure our ingress-nginx config/object to serve up HTTPS traffic and hand over 
+        the Secret Variable that is holding the TLS certificate
+        
+
+        <strong><i>complex/k8s/issuer.yaml</i></strong>
+        <code>
+            apiVersion: cert-manager.io/v1
+            kind: ClusterIssuer
+            metadata:
+            name: letsencrypt-prod
+            spec:
+            acme:
+                server: https://acme-v02.api.letsencrypt.org/directory
+                email: "test@test.com"
+                privateKeySecretRef:
+                name: letsencrypt-prod
+                solvers:
+                - http01:
+                    ingress:
+                        class: nginx
+        </code>
+
+        <strong><i>complex/k8s/certificate.yaml</i></strong>
+        <code>
+            apiVersion: cert-manager.io/v1            
+            kind: Certificate
+            metadata:
+            name: yourdomain-com-tls
+            spec:
+            secretName: yourdomain-com
+            issuerRef:
+                name: letsencrypt-prod
+                kind: ClusterIssuer
+            commonName: yourdomain.com
+            dnsNames:
+                - yourdomain.com
+                - www.yourdomain.com
+        </code>
+
+        <strong>Reconfigure ingress-nginx to use HTTPS with a TLS certificate</strong>
+        <strong><i>project-root/k8s/ingress-service.yaml</i></strong>
+        <code>
+            apiVersion: networking.k8s.io/v1
+            kind: Ingress
+            metadata:
+            name: ingress-service
+            annotations:    
+                cert-manager.io/cluster-issuer: "letsencrypt-prod"
+                
+                # force user to https
+                nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+                ...
+            spec:
+            ingressClassName: nginx
+            
+            tls: 
+                - hots: 
+                    - k8s-multi.com
+                    - www.k8s-multi.com
+                secretName: k8s-multi-com
+        </code>
+
+        <a href="https://github.com/protickr/multi-k8s/tree/master" target="_blank">Source Codes</a>
+        </p>
+
+
+        
+        <h2 id="local-dev-live-sync">Local Development with Live Sync using Skaffold</h2>
+        <p >
+        With Skaffold running, if we change any file that is not listed in "sync:"" array Skaffold will just rebuild the 
+        entire image (Mode 1) and deploy that to our local Kubernetest cluster.
+        <code>
+        deploy: 
+            kubectl:
+                manifests:
+                    - kubernetes-deployment-config-files.yaml
+        </code>
+
+        <strong><i>project-root/skaffold.yaml</i></strong>
+        <code>
+            apiVersion: skaffold/v2beta12
+            kind: Config
+            deploy:
+              kubectl:
+                manifests:
+                  - ./k8s/server-deployment.yaml
+                  - ./k8s/client-deployment.yaml
+                  - ./k8s/worker-deployment.yaml
+            build:
+              local:
+                push: false
+              artifacts:
+                - image: rallycoding/client-skaffold
+                  context: client
+                  docker:
+                    dockerfile: Dockerfile.dev
+                  sync:
+                    manual:
+                      - src: "src/**/*.js"
+                        dest: .
+                      - src: "src/**/*.css"
+                        dest: .
+                      - src: "src/**/*.html"
+                        dest: .
+                - image: rallycoding/worker-skaffold
+                  context: worker
+                  docker:
+                    dockerfile: Dockerfile.dev
+                  sync:
+                    manual:
+                      - src: "*.js"
+                        dest: .
+                - image: rallycoding/server-skaffold
+                  context: server
+                  docker:
+                    dockerfile: Dockerfile.dev
+                  sync:
+                    manual:
+                      - src: "*.js"
+                        dest: .
+        </code>
+
+        <strong>You can also add services to Skaffold manifests section but make sure not to add anything related to data to this 
+        section as it will be deleted automatically on Skaffold shutdown.</strong>
+        
+        <strong>* <i>skaffold dev</i></strong>
+        Start Skaffold
+
+        <strong>Skaffold Sync Note</strong>
+        You would only want to use mode 2 of syncing files is when your different sub projects have some ability to 
+        detect changes and automatically reload themselves.
+        </p>
+        </pre>
+    </main>
+</body>
